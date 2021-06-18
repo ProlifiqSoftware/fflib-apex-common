@@ -2,22 +2,22 @@
  * Copyright (c), FinancialForce.com, inc
  * All rights reserved.
  *
- * Redistribution and use in source and binary forms, with or without modification, 
+ * Redistribution and use in source and binary forms, with or without modification,
  *   are permitted provided that the following conditions are met:
  *
- * - Redistributions of source code must retain the above copyright notice, 
+ * - Redistributions of source code must retain the above copyright notice,
  *      this list of conditions and the following disclaimer.
- * - Redistributions in binary form must reproduce the above copyright notice, 
- *      this list of conditions and the following disclaimer in the documentation 
+ * - Redistributions in binary form must reproduce the above copyright notice,
+ *      this list of conditions and the following disclaimer in the documentation
  *      and/or other materials provided with the distribution.
- * - Neither the name of the FinancialForce.com, inc nor the names of its contributors 
- *      may be used to endorse or promote products derived from this software without 
+ * - Neither the name of the FinancialForce.com, inc nor the names of its contributors
+ *      may be used to endorse or promote products derived from this software without
  *      specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
- *  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES 
- *  OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL 
- *  THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ *  ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+ *  OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
+ *  THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
  *  EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
  *  OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
  *  OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
@@ -65,10 +65,6 @@ public virtual class fflib_SObjectUnitOfWork
 
     protected Map<String, Relationships> m_relationships = new Map<String, Relationships>();
 
-    protected Map<String, List<SObject>> m_publishBeforeListByType = new Map<String, List<SObject>>();
-    protected Map<String, List<SObject>> m_publishAfterSuccessListByType = new Map<String, List<SObject>>();
-    protected Map<String, List<SObject>> m_publishAfterFailureListByType = new Map<String, List<SObject>>();
-
     protected List<IDoWork> m_workList = new List<IDoWork>();
 
     @TestVisible
@@ -89,7 +85,6 @@ public virtual class fflib_SObjectUnitOfWork
         void dmlInsert(List<SObject> objList);
         void dmlUpdate(List<SObject> objList);
         void dmlDelete(List<SObject> objList);
-        void eventPublish(List<SObject> objList);
 	    void emptyRecycleBin(List<SObject> objList);
     }
 
@@ -106,10 +101,6 @@ public virtual class fflib_SObjectUnitOfWork
         public virtual void dmlDelete(List<SObject> objList)
         {
             delete objList;
-        }
-        public virtual void eventPublish(List<SObject> objList)
-        {
-            EventBus.publish(objList);
         }
 		public virtual void emptyRecycleBin(List<SObject> objList)
 		{
@@ -150,20 +141,11 @@ public virtual class fflib_SObjectUnitOfWork
     public virtual void onRegisterType(Schema.SObjectType sObjectType) {}
     public virtual void onCommitWorkStarting() {}
 
-    public virtual void onPublishBeforeEventsStarting() {}
-    public virtual void onPublishBeforeEventsFinished() {}
-
     public virtual void onDMLStarting() {}
     public virtual void onDMLFinished() {}
 
     public virtual void onDoWorkStarting() {}
     public virtual void onDoWorkFinished() {}
-
-    public virtual void onPublishAfterSuccessEventsStarting() {}
-    public virtual void onPublishAfterSuccessEventsFinished() {}
-
-    public virtual void onPublishAfterFailureEventsStarting() {}
-    public virtual void onPublishAfterFailureEventsFinished() {}
 
     public virtual void onCommitWorkFinishing() {}
     public virtual void onCommitWorkFinished(Boolean wasSuccessful) {}
@@ -184,10 +166,6 @@ public virtual class fflib_SObjectUnitOfWork
         m_deletedMapByType.put(sObjectName, new Map<Id, SObject>());
 	    m_emptyRecycleBinMapByType.put(sObjectName, new Map<Id, SObject>());
         m_relationships.put(sObjectName, new Relationships());
-
-        m_publishBeforeListByType.put(sObjectName, new List<SObject>());
-        m_publishAfterSuccessListByType.put(sObjectName, new List<SObject>());
-        m_publishAfterFailureListByType.put(sObjectName, new List<SObject>());
 
         // give derived class opportunity to register the type
         onRegisterType(sObjectType);
@@ -272,7 +250,6 @@ public virtual class fflib_SObjectUnitOfWork
             throw new UnitOfWorkException('Only new records can be registered as new');
         String sObjectType = record.getSObjectType().getDescribe().getName();
 
-		assertForNonEventSObjectType(sObjectType);
 		assertForSupportedSObjectType(m_newListByType, sObjectType);
 
         m_newListByType.get(sObjectType).add(record);
@@ -292,7 +269,6 @@ public virtual class fflib_SObjectUnitOfWork
     {
         String sObjectType = record.getSObjectType().getDescribe().getName();
 
-		assertForNonEventSObjectType(sObjectType);
 		assertForSupportedSObjectType(m_newListByType, sObjectType);
 
         m_relationships.get(sObjectType).add(record, relatedToField, relatedTo);
@@ -369,7 +345,6 @@ public virtual class fflib_SObjectUnitOfWork
             throw new UnitOfWorkException('New records cannot be registered as dirty');
         String sObjectType = record.getSObjectType().getDescribe().getName();
 
-		assertForNonEventSObjectType(sObjectType);
 		assertForSupportedSObjectType(m_dirtyMapByType, sObjectType);
 
         // If record isn't registered as dirty, or no dirty fields to drive a merge
@@ -405,7 +380,6 @@ public virtual class fflib_SObjectUnitOfWork
             throw new UnitOfWorkException('New records cannot be registered as dirty');
         String sObjectType = record.getSObjectType().getDescribe().getName();
 
-		assertForNonEventSObjectType(sObjectType);
 		assertForSupportedSObjectType(m_dirtyMapByType, sObjectType);
 
         m_dirtyMapByType.get(sObjectType).put(record.Id, record);
@@ -433,7 +407,7 @@ public virtual class fflib_SObjectUnitOfWork
      **/
     public void registerUpsert(SObject record)
     {
-        if (record.Id == null) 
+        if (record.Id == null)
         {
             registerNew(record, null, null);
         }
@@ -467,7 +441,6 @@ public virtual class fflib_SObjectUnitOfWork
             throw new UnitOfWorkException('New records cannot be registered for deletion');
         String sObjectType = record.getSObjectType().getDescribe().getName();
 
-		assertForNonEventSObjectType(sObjectType);
 		assertForSupportedSObjectType(m_deletedMapByType, sObjectType);
 
         m_deletedMapByType.get(sObjectType).put(record.Id, record);
@@ -509,89 +482,6 @@ public virtual class fflib_SObjectUnitOfWork
     }
 
     /**
-     * Register a newly created SObject (Platform Event) instance to be published when commitWork is called
-     *
-     * @param record A newly created SObject (Platform Event) instance to be inserted during commitWork
-     **/
-    public void registerPublishBeforeTransaction(SObject record)
-    {
-        String sObjectType = record.getSObjectType().getDescribe().getName();
-
-		assertForEventSObjectType(sObjectType);
-		assertForSupportedSObjectType(m_publishBeforeListByType, sObjectType);
-
-        m_publishBeforeListByType.get(sObjectType).add(record);
-    }
-
-    /**
-     * Register a list of newly created SObject (Platform Event) instance to be published when commitWork is called
-     *
-     * @param records A list of existing records
-     **/
-    public void registerPublishBeforeTransaction(List<SObject> records)
-    {
-        for (SObject record : records)
-        {
-            this.registerPublishBeforeTransaction(record);
-        }
-    }
-
-    /**
-     * Register a newly created SObject (Platform Event) instance to be published when commitWork is called
-     *
-     * @param record A newly created SObject (Platform Event) instance to be inserted during commitWork
-     **/
-    public void registerPublishAfterSuccessTransaction(SObject record)
-    {
-        String sObjectType = record.getSObjectType().getDescribe().getName();
-
-		assertForEventSObjectType(sObjectType);
-		assertForSupportedSObjectType(m_publishAfterSuccessListByType, sObjectType);
-
-        m_publishAfterSuccessListByType.get(sObjectType).add(record);
-    }
-
-    /**
-     * Register a list of newly created SObject (Platform Event) instance to be published when commitWork is called
-     *
-     * @param records A list of existing records
-     **/
-    public void registerPublishAfterSuccessTransaction(List<SObject> records)
-    {
-        for (SObject record : records)
-        {
-            this.registerPublishAfterSuccessTransaction(record);
-        }
-    }
-    /**
-     * Register a newly created SObject (Platform Event) instance to be published when commitWork is called
-     *
-     * @param record A newly created SObject (Platform Event) instance to be inserted during commitWork
-     **/
-    public void registerPublishAfterFailureTransaction(SObject record)
-    {
-        String sObjectType = record.getSObjectType().getDescribe().getName();
-
-		assertForEventSObjectType(sObjectType);
-		assertForSupportedSObjectType(m_publishAfterFailureListByType, sObjectType);
-
-        m_publishAfterFailureListByType.get(sObjectType).add(record);
-    }
-
-    /**
-     * Register a list of newly created SObject (Platform Event) instance to be published when commitWork is called
-     *
-     * @param records A list of existing records
-     **/
-    public void registerPublishAfterFailureTransaction(List<SObject> records)
-    {
-        for (SObject record : records)
-        {
-            this.registerPublishAfterFailureTransaction(record);
-        }
-    }
-
-    /**
      * Takes all the work that has been registered with the UnitOfWork and commits it to the database
      **/
 	public void commitWork()
@@ -617,9 +507,6 @@ public virtual class fflib_SObjectUnitOfWork
 	private void doCommitWork()
 	{
 		onCommitWorkStarting();
-		onPublishBeforeEventsStarting();
-		publishBeforeEventsStarting();
-		onPublishBeforeEventsFinished();
 
 		onDMLStarting();
 		insertDmlByType();
@@ -637,37 +524,7 @@ public virtual class fflib_SObjectUnitOfWork
 
 	private void doAfterCommitWorkSteps(Boolean wasSuccessful)
 	{
-		if (wasSuccessful)
-		{
-			doAfterCommitWorkSuccessSteps();
-		}
-		else
-		{
-			doAfterCommitWorkFailureSteps();
-		}
 		onCommitWorkFinished(wasSuccessful);
-	}
-
-	private void doAfterCommitWorkSuccessSteps()
-	{
-		onPublishAfterSuccessEventsStarting();
-		publishAfterSuccessEvents();
-		onPublishAfterSuccessEventsFinished();
-	}
-
-	private void doAfterCommitWorkFailureSteps()
-	{
-		onPublishAfterFailureEventsStarting();
-		publishAfterFailureEvents();
-		onPublishAfterFailureEventsFinished();
-	}
-
-	private void publishBeforeEventsStarting()
-	{
-		for (Schema.SObjectType sObjectType : m_sObjectTypes)
-		{
-			m_dml.eventPublish(m_publishBeforeListByType.get(sObjectType.getDescribe().getName()));
-		}
 	}
 
 	private void insertDmlByType()
@@ -716,49 +573,6 @@ public virtual class fflib_SObjectUnitOfWork
 		for (IDoWork work : m_workList)
 		{
 			work.doWork();
-		}
-	}
-
-	private void publishAfterSuccessEvents()
-	{
-		for (Schema.SObjectType sObjectType : m_sObjectTypes)
-		{
-			m_dml.eventPublish(m_publishAfterSuccessListByType.get(sObjectType.getDescribe().getName()));
-		}
-	}
-
-	private void publishAfterFailureEvents()
-	{
-		for (Schema.SObjectType sObjectType : m_sObjectTypes)
-		{
-			m_dml.eventPublish(m_publishAfterFailureListByType.get(sObjectType.getDescribe().getName()));
-		}
-	}
-
-	private void assertForNonEventSObjectType(String sObjectType)
-	{
-		if (sObjectType.length() > 3 && sObjectType.right(3)  == '__e')
-		{
-			throw new UnitOfWorkException(
-					String.format(
-							'SObject type {0} must use registerPublishBeforeTransaction or ' +
-									'registerPublishAfterTransaction methods to be used within this unit of work',
-							new List<String> { sObjectType }
-					)
-			);
-		}
-	}
-
-	private void assertForEventSObjectType(String sObjectType)
-	{
-		if (sObjectType.length() > 3 && sObjectType.right(3) != '__e')
-		{
-			throw new UnitOfWorkException(
-					String.format(
-							'SObject type {0} is invalid for publishing within this unit of work',
-							new List<String> {sObjectType}
-					)
-			);
 		}
 	}
 
